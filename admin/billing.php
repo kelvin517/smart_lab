@@ -33,11 +33,12 @@ include 'includes/sidebar.php';
           </thead>
           <tbody>
           <?php
-            $sql = "SELECT b.id AS bill_id, u.full_name, bk.test_type, b.amount, b.status, b.created_at
+            $sql = "SELECT b.id AS bill_id, p.full_name, bk.test_type, b.amount, b.status, b.created_at
                     FROM billing b
                     JOIN bookings bk ON b.booking_id = bk.id
-                    JOIN users u ON bk.patient_id = u.id
+                    JOIN patients p ON bk.patient_id = p.id
                     ORDER BY b.created_at DESC";
+
             $res = mysqli_query($conn, $sql);
             while ($row = mysqli_fetch_assoc($res)) {
               echo "<tr>

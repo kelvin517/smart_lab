@@ -8,34 +8,76 @@ if (!isset($_SESSION['doctor_id'])) {
 }
 
 $doctor_name = $_SESSION['doctor_name'];
-$success = $error = '';
+$success = $error = "";
 
-// Handle manual result upload
+// Handle result upload
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_result'])) {
     $booking_id = intval($_POST['booking_id']);
 
     if (isset($_FILES['result_file']) && $_FILES['result_file']['error'] === UPLOAD_ERR_OK) {
         $file_tmp = $_FILES['result_file']['tmp_name'];
-        $file_name = basename($_FILES['result_file']['name']);
+        $file_name = time() . '_' . basename($_FILES['result_file']['name']);
         $destination = '../uploads/' . $file_name;
 
         if (move_uploaded_file($file_tmp, $destination)) {
-            $update = $conn->prepare("UPDATE bookings SET result_file = ?, status = 'Completed' WHERE id = ?");
-            $update->bind_param("si", $file_name, $booking_id);
+            $uploaded_by = $_SESSION['doctor_id'];
+            $uploaded_by_role = 'doctor';
+
+            $update = $conn->prepare("UPDATE bookings SET result_file = ?, status = 'Completed', uploaded_by = ?, uploaded_by_role = ? WHERE id = ?");
+            $update->bind_param("sisi", $file_name, $uploaded_by, $uploaded_by_role, $booking_id);
 
             if ($update->execute()) {
-                $success = "Result file uploaded successfully.";
+                $success = "Result uploaded successfully.";
             } else {
-                $error = "Failed to update result in database.";
+                $error = "Failed to update result.";
             }
+
             $update->close();
         } else {
-            $error = "Failed to move uploaded file.";
+            $error = "File upload failed.";
         }
     } else {
-        $error = "Please select a valid result file.";
+        $error = "Invalid result file.";
     }
 }
+
+// Filtering logic
+$filter_technician = $_GET['technician'] ?? '';
+$filter_date = $_GET['date'] ?? '';
+$where = "1=1";
+$params = [];
+$types = "";
+
+if (!empty($filter_technician)) {
+    $where .= " AND b.uploaded_by = ?";
+    $params[] = $filter_technician;
+    $types .= "i";
+}
+if (!empty($filter_date)) {
+    $where .= " AND DATE(b.created_at) = ?";
+    $params[] = $filter_date;
+    $types .= "s";
+}
+
+$sql = "
+    SELECT b.*, p.full_name AS patient_name,
+      CASE 
+        WHEN b.uploaded_by_role = 'doctor' THEN (SELECT full_name FROM doctors WHERE id = b.uploaded_by)
+        WHEN b.uploaded_by_role = 'technician' THEN (SELECT full_name FROM users WHERE id = b.uploaded_by)
+        ELSE 'Not Tracked'
+      END AS uploader_name
+    FROM bookings b
+    JOIN patients p ON b.patient_id = p.id
+    WHERE $where
+    ORDER BY b.created_at DESC
+";
+
+$stmt = $conn->prepare($sql);
+if (!empty($params)) {
+    $stmt->bind_param($types, ...$params);
+}
+$stmt->execute();
+$result = $stmt->get_result();
 ?>
 
 <?php include 'includes/header.php'; ?>
@@ -55,65 +97,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['upload_result'])) {
   <section class="section">
     <div class="card">
       <div class="card-body pt-4">
-        <h5 class="card-title">Patient Test Results</h5>
 
+        <!-- Filter Form -->
+        <h5 class="card-title">Filter Test Results</h5>
+        <form class="row g-3 mb-4" method="GET">
+          <div class="col-md-4">
+            <label class="form-label">Technician</label>
+            <select class="form-select" name="technician">
+              <option value="">-- All --</option>
+              <?php
+              $techs = $conn->query("SELECT id, full_name FROM users WHERE role = 'technician'");
+              while ($tech = $techs->fetch_assoc()):
+              ?>
+              <option value="<?= $tech['id'] ?>" <?= ($tech['id'] == $filter_technician) ? 'selected' : '' ?>>
+                <?= htmlspecialchars($tech['full_name']) ?>
+              </option>
+              <?php endwhile; ?>
+            </select>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Date</label>
+            <input type="date" name="date" class="form-control" value="<?= htmlspecialchars($filter_date) ?>">
+          </div>
+          <div class="col-md-4 align-self-end">
+            <button class="btn btn-primary" type="submit">Apply Filter</button>
+          </div>
+        </form>
+
+        <!-- Upload Notification -->
         <?php if ($success): ?>
           <div class="alert alert-success"><?= $success ?></div>
         <?php elseif ($error): ?>
           <div class="alert alert-danger"><?= $error ?></div>
         <?php endif; ?>
 
-        <table class="table datatable">
+        <!-- Results Table -->
+        <h5 class="card-title">Test Result List</h5>
+        <table class="table table-bordered table-hover">
           <thead>
             <tr>
               <th>Patient</th>
               <th>Test Type</th>
-              <th>Date</th>
               <th>Status</th>
+              <th>Date</th>
               <th>Result</th>
+              <th>Uploaded By</th>
             </tr>
           </thead>
           <tbody>
-            <?php
-            $query = "
-              SELECT b.*, p.full_name 
-              FROM bookings b 
-              JOIN patients p ON b.patient_id = p.id 
-              ORDER BY b.created_at DESC
-            ";
-            $result = $conn->query($query);
-            while ($row = $result->fetch_assoc()):
-              $file_path = "../uploads/" . $row['result_file'];
-              $file_exists = !empty($row['result_file']) && file_exists($file_path);
+            <?php while ($row = $result->fetch_assoc()):
+              $file_path = '../uploads/' . $row['result_file'];
+              $has_result = !empty($row['result_file']) && file_exists($file_path);
             ?>
-              <tr>
-                <td><?= htmlspecialchars($row['full_name']) ?></td>
-                <td><?= htmlspecialchars($row['test_type']) ?></td>
-                <td><?= htmlspecialchars($row['created_at']) ?></td>
-                <td>
-                  <?php if ($row['status'] === 'Completed'): ?>
-                    <span class="badge bg-success">Completed</span>
-                  <?php else: ?>
-                    <span class="badge bg-warning text-dark"><?= $row['status'] ?></span>
-                  <?php endif; ?>
-                </td>
-                <td>
-                  <?php if ($file_exists): ?>
-                    <a href="<?= $file_path ?>" target="_blank" class="btn btn-sm btn-primary">View</a>
-                  <?php else: ?>
-                    <!-- Upload form -->
-                    <form method="POST" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
-                      <input type="hidden" name="booking_id" value="<?= $row['id'] ?>">
-                      <input type="file" name="result_file" accept=".pdf,.jpg,.png,.doc,.docx" required>
-                      <button type="submit" name="upload_result" class="btn btn-sm btn-success">Upload</button>
-                    </form>
-                  <?php endif; ?>
-                </td>
-              </tr>
+            <tr>
+              <td><?= htmlspecialchars($row['patient_name']) ?></td>
+              <td><?= htmlspecialchars($row['test_type']) ?></td>
+              <td>
+                <?php if ($row['status'] === 'Completed'): ?>
+                  <span class="badge bg-success">Completed</span>
+                <?php else: ?>
+                  <span class="badge bg-warning text-dark"><?= $row['status'] ?></span>
+                <?php endif; ?>
+              </td>
+              <td><?= htmlspecialchars($row['created_at']) ?></td>
+              <td>
+                <?php if ($has_result): ?>
+                  <a href="<?= $file_path ?>" target="_blank" class="btn btn-sm btn-primary">View</a>
+                <?php else: ?>
+                  <form method="POST" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+                    <input type="hidden" name="booking_id" value="<?= $row['id'] ?>">
+                    <input type="file" name="result_file" class="form-control" required>
+                    <button type="submit" name="upload_result" class="btn btn-sm btn-success">Upload</button>
+                  </form>
+                <?php endif; ?>
+              </td>
+              <td><?= htmlspecialchars($row['uploader_name']) ?></td>
+            </tr>
             <?php endwhile; ?>
           </tbody>
         </table>
-
       </div>
     </div>
   </section>
