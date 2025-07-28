@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Passwords do not match.";
     } else {
         $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("UPDATE doctors SET password = ?, must_change_password = 0 WHERE id = ?");
+        $stmt = $conn->prepare("UPDATE doctors SET password = ?, must_change_password = 1 WHERE id = ?");
         $stmt->bind_param("si", $hashed_password, $doctor_id);
 
         if ($stmt->execute()) {
