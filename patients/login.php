@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       color: white;
     }
     .login-box {
-      background: #003366;
+      background: yellow;
       padding: 40px;
       border-radius: 10px;
       width: 100%;
