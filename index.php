@@ -38,8 +38,8 @@
             </p>
             <div class="d-grid gap-2 col-6 mx-auto">
               <a href="doctor/doctor_login.php" class="btn btn-success btn-lg">Doctor Login</a>
-              <a href="lab/lab_login.php" class="btn btn-warning btn-lg text-white">Lab Technician Login</a>
-              <a href="patient/patient_login.php" class="btn btn-info btn-lg">Patient Login</a>
+              <a href="technician/login_technician.php" class="btn btn-warning btn-lg text-white">Lab Technician Login</a>
+              <a href="patients/login.php" class="btn btn-info btn-lg">Patient Login</a>
             </div>
           </div>
         </div>
