@@ -144,7 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <!-- Right: Illustration -->
     <div class="col-md-6 right-img d-none d-md-flex">
-      <img src="../assets/img/4e16d7162b915b8de14a767f1d15b26d520511d6.png" alt="Login Illustration">
+      <img src="../assets/img/top-view-medicine-blue-background.jpg" alt="Login Illustration">
     </div>
   </div>
 </div>
